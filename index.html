@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>クイズバトル！</title>
+    <style>
+        :root {
+            --primary-color: #4a4e69;
+            --secondary-color: #9a8c98;
+            --accent-color: #c9ada7;
+            --background-color: #f2e9e4;
+            --text-color: #22223b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            transition: background-color 0.3s ease;
+        }
+
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        input, button {
+            padding: 0.75rem;
+            font-size: 1rem;
+            border: 2px solid var(--secondary-color);
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 5px rgba(74, 78, 105, 0.5);
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+
+        button:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        #question {
+            font-size: 1.5rem;
+            margin: 1rem 0;
+            min-height: 3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--accent-color);
+            color: var(--text-color);
+            border-radius: 10px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .answer-button {
+            background-color: var(--secondary-color);
+            font-size: 1.2rem;
+            padding: 1rem 2rem;
+        }
+
+        #score, #result {
+            font-size: 1.2rem;
+            margin-top: 1rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        #countdown {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin: 1rem 0;
+            transition: all 0.3s ease;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .fade-out {
+            animation: fadeOut 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        .shake {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            #question {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>クイズバトル！</h1>
+        <section id="setup" class="grid">
+            <div>
+                <input type="text" id="roomId" placeholder="ルームID" aria-label="ルームID">
+                <input type="number" id="questionCount" placeholder="問題数" min="1" max="10" aria-label="問題数">
+                <button id="createRoom">ルーム作成</button>
+            </div>
+            <div>
+                <input type="text" id="joinRoomId" placeholder="参加するルームID" aria-label="参加するルームID">
+                <button id="joinRoom">ルーム参加</button>
+            </div>
+        </section>
+        <section id="game" class="grid" style="display:none;">
+            <div id="countdown" aria-live="polite"></div>
+            <div id="question" aria-live="polite"></div>
+            <button id="answerButton" class="answer-button">回答する！</button>
+            <div id="answerInput" style="display:none;">
+                <input type="text" id="answer" placeholder="回答を入力" aria-label="回答">
+                <button id="submitAnswer">回答送信</button>
+            </div>
+            <div id="score" aria-live="polite"></div>
+        </section>
+        <section id="result" style="display:none;" aria-live="polite"></section>
+    </main>
+
+    <script>
+        const questions = [
+            { question: "あいうえお", answer: "かきくけこ" },
+            { question: "さしすせそ", answer: "たちつてと" }
+        ];
+
+        let usedQuestions = [];
+
+        let roomId, questionCount, currentQuestion, score, opponentScore, canAnswer, questionInterval;
+
+        const setupDiv = document.getElementById('setup');
+        const gameDiv = document.getElementById('game');
+        const resultDiv = document.getElementById('result');
+        const questionDiv = document.getElementById('question');
+        const answerButton = document.getElementById('answerButton');
+        const answerInput = document.getElementById('answerInput');
+        const submitAnswer = document.getElementById('submitAnswer');
+        const scoreDiv = document.getElementById('score');
+        const countdownDiv = document.getElementById('countdown');
+
+        document.getElementById('createRoom').addEventListener('click', createRoom);
+        document.getElementById('joinRoom').addEventListener('click', joinRoom);
+        answerButton.addEventListener('click', startAnswering);
+        submitAnswer.addEventListener('click', checkAnswer);
+
+        function createRoom() {
+            roomId = document.getElementById('roomId').value;
+            questionCount = parseInt(document.getElementById('questionCount').value);
+            if (roomId && questionCount > 0) {
+                usedQuestions = [];
+                setupDiv.classList.add('fade-out');
+                setTimeout(() => {
+                    setupDiv.style.display = 'none';
+                    startGame();
+                }, 500);
+            } else {
+                shake(document.getElementById('createRoom'));
+            }
+        }
+
+        function joinRoom() {
+            roomId = document.getElementById('joinRoomId').value;
+            if (roomId) {
+                setupDiv.classList.add('fade-out');
+                setTimeout(() => {
+                    setupDiv.style.display = 'none';
+                    startGame();
+                }, 500);
+            } else {
+                shake(document.getElementById('joinRoom'));
+            }
+        }
+
+        function startGame() {
+            gameDiv.style.display = 'grid';
+            gameDiv.classList.add('fade-in');
+            score = 0;
+            opponentScore = 0;
+            updateScore();
+            startCountdown();
+        }
+
+        function startCountdown() {
+            let count = 3;
+            countdownDiv.textContent = count;
+            const countdownInterval = setInterval(() => {
+                count--;
+                countdownDiv.textContent = count;
+                countdownDiv.classList.add('shake');
+                setTimeout(() => countdownDiv.classList.remove('shake'), 500);
+                if (count === 0) {
+                    clearInterval(countdownInterval);
+                    countdownDiv.classList.add('fade-out');
+                    setTimeout(() => {
+                        countdownDiv.textContent = '';
+                        countdownDiv.classList.remove('fade-out');
+                        startQuestions();
+                    }, 500);
+                }
+            }, 1000);
+        }
+
+        function startQuestions() {
+            if (questionCount > 0) {
+                canAnswer = true;
+                if (questions.length === usedQuestions.length) {
+                    endGame();
+                    return;
+                }
+                let availableQuestions = questions.filter(q => !usedQuestions.includes(q));
+                currentQuestion = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+                usedQuestions.push(currentQuestion);
+                displayQuestion();
+            } else {
+                endGame();
+            }
+        }
+
+        function displayQuestion() {
+            answerButton.disabled = false;
+            let displayedText = '';
+            let charIndex = 0;
+            questionDiv.classList.add('fade-in');
+            questionInterval = setInterval(() => {
+                if (charIndex < currentQuestion.question.length) {
+                    displayedText += currentQuestion.question[charIndex];
+                    questionDiv.textContent = displayedText;
+                    charIndex++;
+                } else {
+                    clearInterval(questionInterval);
+                }
+            }, 100);
+        }
+
+        function startAnswering() {
+            if (canAnswer) {
+                clearInterval(questionInterval);
+                questionDiv.textContent = currentQuestion.question;
+                answerButton.classList.add('fade-out');
+                setTimeout(() => {
+                    answerButton.style.display = 'none';
+                    answerInput.style.display = 'block';
+                    answerInput.classList.add('fade-in');
+                    document.getElementById('answer').focus();
+                }, 300);
+            }
+        }
+
+        function checkAnswer() {
+            const userAnswer = document.getElementById('answer').value;
+            if (userAnswer.toLowerCase() === currentQuestion.answer.toLowerCase()) {
+                score++;
+                updateScore();
+                showFeedback(true);
+            } else {
+                canAnswer = false;
+                showFeedback(false);
+                setTimeout(() => {
+                    canAnswer = true;
+                }, 2000);
+            }
+            answerInput.classList.add('fade-out');
+            setTimeout(() => {
+                answerInput.style.display = 'none';
+                answerInput.classList.remove('fade-out');
+                answerButton.style.display = 'block';
+                answerButton.classList.remove('fade-out');
+                answerButton.classList.add('fade-in');
+                document.getElementById('answer').value = '';
+                nextQuestion();
+            }, 500);
+        }
+
+        function showFeedback(isCorrect) {
+            const feedback = document.createElement('div');
+            feedback.textContent = isCorrect ? '正解！' : '不正解...';
+            feedback.style.position = 'fixed';
+            feedback.style.top = '50%';
+            feedback.style.left = '50%';
+            feedback.style.transform = 'translate(-50%, -50%)';
+            feedback.style.fontSize = '2rem';
+            feedback.style.fontWeight = 'bold';
+            feedback.style.color = isCorrect ? 'green' : 'red';
+            feedback.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+            feedback.style.padding = '1rem 2rem';
+            feedback.style.borderRadius = '10px';
+            feedback.style.zIndex = '1000';
+            document.body.appendChild(feedback);
+            setTimeout(() => {
+                feedback.classList.add('fade-out');
+                setTimeout(() => document.body.removeChild(feedback), 500);
+            }, 1000);
+        }
+
+        function nextQuestion() {
+            questionCount--;
+            questionDiv.classList.add('fade-out');
+            setTimeout(() => {
+                questionDiv.classList.remove('fade-out');
+                startQuestions();
+            }, 500);
+        }
+
+        function updateScore() {
+            scoreDiv.textContent = `あなたのスコア: ${score} | 相手のスコア: ${opponentScore}`;
+            scoreDiv.classList.add('shake');
+            setTimeout(() => scoreDiv.classList.remove('shake'), 500);
+        }
+
+        function endGame() {
+            gameDiv.classList.add('fade-out');
+            setTimeout(() => {
+                gameDiv.style.display = 'none';
+                resultDiv.style.display = 'block';
+                resultDiv.classList.add('fade-in');
+                let result;
+                if (score > opponentScore) {
+                    result = '勝ち！';
+                    document.body.style.backgroundColor = '#e6ffe6';
+                } else if (score < opponentScore) {
+                    result = '負け...';
+                    document.body.style.backgroundColor = '#ffe6e6';
+                } else {
+                    result = '引き分け';
+                    document.body.style.backgroundColor = '#e6e6ff';
+                }
+                resultDiv.textContent = `ゲーム終了！結果: ${result}`;
+                setTimeout(() => {
+                    resultDiv.classList.add('fade-out');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 500);
+                }, 5000);
+            }, 500);
+        }
+
+        function shake(element) {
+            element.classList.add('shake');
+            setTimeout(() => element.classList.remove('shake'), 500);
+        }
+    </script>
+</body>
+</html>
